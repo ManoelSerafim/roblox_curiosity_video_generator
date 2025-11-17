@@ -1,28 +1,20 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { generateScript, generateTTS, generateImages, generateVideo } from '../services/geminiService';
 import { VideoGenerationResult, AspectRatio } from '../types';
 import Loader from './Loader';
 
-const VideoGenerator: React.FC = () => {
+interface VideoGeneratorProps {
+  apiKeySelected: boolean;
+  onApiKeyError: () => void;
+}
+
+const VideoGenerator: React.FC<VideoGeneratorProps> = ({ apiKeySelected, onApiKeyError }) => {
   const [title, setTitle] = useState<string>('');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.Portrait);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<VideoGenerationResult | null>(null);
-  const [apiKeySelected, setApiKeySelected] = useState<boolean>(false);
-
-  const checkApiKey = useCallback(async () => {
-    if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
-      const hasKey = await window.aistudio.hasSelectedApiKey();
-      setApiKeySelected(hasKey);
-    }
-  }, []);
-
-  useEffect(() => {
-    checkApiKey();
-  }, [checkApiKey]);
 
   const handleGenerate = async () => {
     if (!title.trim()) {
@@ -31,14 +23,8 @@ const VideoGenerator: React.FC = () => {
     }
 
     if (!apiKeySelected) {
-        try {
-            await window.aistudio.openSelectKey();
-            // Assume success after dialog opens to avoid race conditions.
-            setApiKeySelected(true); 
-        } catch (e) {
-            setError('API Key selection is required for video generation.');
-            return;
-        }
+        setError('API Key selection is required. Please select an API key using the prompt above.');
+        return;
     }
 
     setIsLoading(true);
@@ -64,7 +50,7 @@ const VideoGenerator: React.FC = () => {
       const videoData = await generateVideo(scriptResult.script, imageUrls[0], aspectRatio, (opError) => {
         if (opError.message.includes('Requested entity was not found')) {
             setError('API Key is invalid. Please select a valid key.');
-            setApiKeySelected(false);
+            onApiKeyError();
             setIsLoading(false);
         }
       });
@@ -78,37 +64,18 @@ const VideoGenerator: React.FC = () => {
       });
     } catch (e: any) {
       console.error(e);
-      setError(`An error occurred: ${e.message}`);
+      // Don't reset API key on generic errors, only on the specific one from the callback
+      if (!e.message.includes('Requested entity was not found')) {
+          setError(`An error occurred: ${e.message}`);
+      }
     } finally {
       setIsLoading(false);
       setStatusMessage('');
     }
   };
 
-  const ApiKeyPrompt = () => (
-    <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-200 px-4 py-3 rounded-lg relative mb-4" role="alert">
-        <strong className="font-bold">Action Required: </strong>
-        <span className="block sm:inline">An API key is needed for video generation.</span>
-        <div className="mt-2">
-            <button
-                onClick={async () => {
-                    await window.aistudio.openSelectKey();
-                    setApiKeySelected(true);
-                }}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition-colors"
-            >
-                Select API Key
-            </button>
-            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="ml-4 text-sm underline hover:text-yellow-100">
-                Learn about billing
-            </a>
-        </div>
-    </div>
-  );
-
   return (
     <div className="space-y-6">
-      {!apiKeySelected && <ApiKeyPrompt />}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2">
           <label htmlFor="title" className="block text-sm font-medium text-gray-300 mb-1">
