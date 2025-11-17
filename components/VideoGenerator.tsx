@@ -4,11 +4,11 @@ import { VideoGenerationResult, AspectRatio } from '../types';
 import Loader from './Loader';
 
 interface VideoGeneratorProps {
-  apiKeySelected: boolean;
-  onApiKeyError: () => void;
+  apiKey: string | null;
+  onInvalidApiKey: () => void;
 }
 
-const VideoGenerator: React.FC<VideoGeneratorProps> = ({ apiKeySelected, onApiKeyError }) => {
+const VideoGenerator: React.FC<VideoGeneratorProps> = ({ apiKey, onInvalidApiKey }) => {
   const [title, setTitle] = useState<string>('');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.Portrait);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -22,8 +22,8 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ apiKeySelected, onApiKe
       return;
     }
 
-    if (!apiKeySelected) {
-        setError('API Key selection is required. Please select an API key using the prompt above.');
+    if (!apiKey) {
+        setError('An API Key is required. Please set one in the section above.');
         return;
     }
 
@@ -34,26 +34,20 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ apiKeySelected, onApiKe
     try {
       // Step 1: Generate Script
       setStatusMessage('Crafting a viral script...');
-      const scriptResult = await generateScript(title);
+      const scriptResult = await generateScript(title, apiKey);
       
       // Step 2: Generate Audio
       setStatusMessage('Recording the voice-over...');
-      const audioData = await generateTTS(scriptResult.script);
+      const audioData = await generateTTS(scriptResult.script, apiKey);
       const audioUrl = URL.createObjectURL(new Blob([audioData], { type: 'audio/mp3' }));
 
       // Step 3: Generate Images
       setStatusMessage('Creating visual assets...');
-      const imageUrls = await generateImages(scriptResult.keywords, aspectRatio);
+      const imageUrls = await generateImages(scriptResult.keywords, aspectRatio, apiKey);
       
       // Step 4: Generate Video
       setStatusMessage('Editing the final video... This may take a few minutes.');
-      const videoData = await generateVideo(scriptResult.script, imageUrls[0], aspectRatio, (opError) => {
-        if (opError.message.includes('Requested entity was not found')) {
-            setError('API Key is invalid. Please select a valid key.');
-            onApiKeyError();
-            setIsLoading(false);
-        }
-      });
+      const videoData = await generateVideo(scriptResult.script, imageUrls[0], aspectRatio, apiKey);
       const videoUrl = URL.createObjectURL(new Blob([videoData], { type: 'video/mp4' }));
 
       setResult({
@@ -64,8 +58,10 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ apiKeySelected, onApiKe
       });
     } catch (e: any) {
       console.error(e);
-      // Don't reset API key on generic errors, only on the specific one from the callback
-      if (!e.message.includes('Requested entity was not found')) {
+       if (e.message.includes('API key not valid') || e.message.includes('permission') || e.message.includes('entity was not found')) {
+          setError('The provided API Key is invalid or does not have the required permissions. The key has been cleared.');
+          onInvalidApiKey();
+      } else {
           setError(`An error occurred: ${e.message}`);
       }
     } finally {
@@ -109,7 +105,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({ apiKeySelected, onApiKe
       </div>
       <button
         onClick={handleGenerate}
-        disabled={isLoading || !title.trim() || !apiKeySelected}
+        disabled={isLoading || !title.trim() || !apiKey}
         className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-900 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-md transition-colors duration-200 flex items-center justify-center"
       >
         {isLoading ? 'Generating...' : 'Generate Video'}

@@ -4,10 +4,10 @@ import { SpeechToTextIcon } from './icons/SpeechToTextIcon';
 import { encode } from '../utils/audioUtils';
 
 interface AudioTranscriberProps {
-  apiKeySelected: boolean;
+  apiKey: string | null;
 }
 
-const AudioTranscriber: React.FC<AudioTranscriberProps> = ({ apiKeySelected }) => {
+const AudioTranscriber: React.FC<AudioTranscriberProps> = ({ apiKey }) => {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [transcription, setTranscription] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -45,8 +45,8 @@ const AudioTranscriber: React.FC<AudioTranscriberProps> = ({ apiKeySelected }) =
   }, []);
 
   const startRecording = async () => {
-    if (!apiKeySelected) {
-      setError("An API key is required. Please select one using the prompt above.");
+    if (!apiKey) {
+      setError("An API key is required. Please set one above.");
       return;
     }
     setIsRecording(true);
@@ -61,8 +61,7 @@ const AudioTranscriber: React.FC<AudioTranscriberProps> = ({ apiKeySelected }) =
       
       streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // FIX: Cast window to `any` to allow access to the vendor-prefixed `webkitAudioContext` for broader browser compatibility.
+      const ai = new GoogleGenAI({ apiKey: apiKey });
       audioContextRef.current = new ((window as any).AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       
       sessionPromiseRef.current = ai.live.connect({
@@ -120,7 +119,7 @@ const AudioTranscriber: React.FC<AudioTranscriberProps> = ({ apiKeySelected }) =
 
     } catch (err: any) {
       if (err.message.includes("API key not valid")) {
-        setError("The provided API Key is not valid. Please select a new one.");
+        setError("The provided API Key is not valid. It has been cleared.");
       } else {
         setError(`Failed to start recording: ${err.message}`);
       }
@@ -148,7 +147,7 @@ const AudioTranscriber: React.FC<AudioTranscriberProps> = ({ apiKeySelected }) =
       </div>
       <button
         onClick={isRecording ? stopRecording : startRecording}
-        disabled={!apiKeySelected && !isRecording}
+        disabled={!apiKey && !isRecording}
         className={`px-6 py-3 font-bold rounded-full text-white transition-all duration-300 flex items-center gap-2 ${
           isRecording 
           ? 'bg-red-600 hover:bg-red-700 animate-pulse' 

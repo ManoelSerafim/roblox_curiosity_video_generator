@@ -1,4 +1,3 @@
-// FIX: Import `Modality` to use in the text-to-speech request config.
 import { GoogleGenAI, Type, Modality } from '@google/genai';
 import { ScriptResult, AspectRatio } from '../types';
 import { decode } from '../utils/audioUtils';
@@ -19,8 +18,8 @@ const SCRIPT_SCHEMA = {
   required: ['script', 'keywords'],
 };
 
-export async function generateScript(title: string): Promise<ScriptResult> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export async function generateScript(title: string, apiKey: string): Promise<ScriptResult> {
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-pro',
         contents: `Generate a script for a short video about: "${title}"`,
@@ -46,13 +45,12 @@ export async function generateScript(title: string): Promise<ScriptResult> {
     }
 }
 
-export async function generateTTS(script: string): Promise<Uint8Array> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export async function generateTTS(script: string, apiKey: string): Promise<Uint8Array> {
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: script }] }],
         config: {
-            // FIX: Replaced `responseMimeType` with `responseModalities` and added a `speechConfig` as required by the TTS model.
             responseModalities: [Modality.AUDIO],
             speechConfig: {
                 voiceConfig: {
@@ -69,8 +67,8 @@ export async function generateTTS(script: string): Promise<Uint8Array> {
     return decode(base64Audio);
 }
 
-export async function generateImages(keywords: string[], aspectRatio: AspectRatio): Promise<string[]> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export async function generateImages(keywords: string[], aspectRatio: AspectRatio, apiKey: string): Promise<string[]> {
+    const ai = new GoogleGenAI({ apiKey });
     const imagePrompts = keywords.slice(0, 4).map(keyword => 
         `High-quality, vertical Roblox in-game screenshot or gameplay footage related to: "${keyword}". Cinematic, detailed.`
     );
@@ -108,11 +106,10 @@ async function fileToBase64(fileUrl: string): Promise<string> {
 export async function generateVideo(
     script: string, 
     startImageUrl: string, 
-    aspectRatio: AspectRatio, 
-    onError: (error: Error) => void
+    aspectRatio: AspectRatio,
+    apiKey: string,
 ): Promise<ArrayBuffer> {
-    // A new instance is created here to ensure it uses the latest selected API key.
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
     const base64Image = await fileToBase64(startImageUrl);
 
     let operation = await ai.models.generateVideos({
@@ -131,12 +128,7 @@ export async function generateVideo(
 
     while (!operation.done) {
         await new Promise(resolve => setTimeout(resolve, 10000));
-        try {
-             operation = await ai.operations.getVideosOperation({ operation: operation });
-        } catch(e: any) {
-            onError(e);
-            throw e;
-        }
+        operation = await ai.operations.getVideosOperation({ operation: operation });
     }
 
     if (operation.error) {
@@ -148,8 +140,10 @@ export async function generateVideo(
         throw new Error('Video generation finished but no download link was provided.');
     }
 
-    const videoResponse = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    const videoResponse = await fetch(`${downloadLink}&key=${apiKey}`);
     if (!videoResponse.ok) {
+        const errorText = await videoResponse.text();
+        console.error("Video download failed with status:", videoResponse.status, "and message:", errorText);
         throw new Error('Failed to download the generated video.');
     }
     return videoResponse.arrayBuffer();
