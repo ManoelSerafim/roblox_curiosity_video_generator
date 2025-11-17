@@ -1,0 +1,7 @@
+{
+  "name": "Roblox Curiosity Video Generator",
+  "description": "An application that automatically generates short-form videos about Roblox trivia from a single title, complete with AI-generated script, voice-over, images, and video. It also includes an audio transcription feature.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
